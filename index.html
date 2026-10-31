@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3f5f2">
+<title>Broccoli Cook Mode v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Mono:wght@500;700&display=swap">
+<style>
+/* Base reset */
+body { margin: 0; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+/* Layout: ingredients always LEFT of the step (Vertical design) in both orientations; rotation only re-proportions panes and moves the timer into the nav row (Adaptive design). */
+:root {
+  --bg: #f3f5f2;
+  --surface: #ffffff;
+  --pane: #e9eee9;
+  --ink: #15201a;
+  --muted: #56635b;
+  --line: #d3dbd4;
+  --accent: #2a7a4a;
+  --accent-ink: #ffffff;
+  --amber: #a8600a;
+  --amber-soft: #fbeedb;
+  --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1310; --surface: #161d18; --pane: #1c251f; --ink: #e7ede8; --muted: #9eaca3; --line: #2b362f;
+    --accent: #5cc189; --accent-ink: #07130b; --amber: #f2ab4f; --amber-soft: #33240f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1310; --surface: #161d18; --pane: #1c251f; --ink: #e7ede8; --muted: #9eaca3; --line: #2b362f;
+  --accent: #5cc189; --accent-ink: #07130b; --amber: #f2ab4f; --amber-soft: #33240f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 17px; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; line-height: 1.15; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+svg { flex: none; }
+
+/* ---------- Start screen ---------- */
+#start { min-height: 100%; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 40px; }
+.start-in { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+.start-head { display: flex; flex-direction: column; gap: 10px; }
+.start-head h1 { font-size: clamp(2rem, 8vw, 2.6rem); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); }
+.facts b { color: var(--ink); }
+.cta { display: flex; flex-direction: column; gap: 10px; }
+.btn-big { min-height: 68px; border-radius: 16px; border: 0; background: var(--accent); color: var(--accent-ink); font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 20px; }
+.btn-plain { min-height: 48px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; }
+.cta-note { font-size: .9rem; color: var(--muted); }
+.notice { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; font-weight: 700; }
+.notice[hidden] { display: none; }
+.block { display: flex; flex-direction: column; gap: 12px; }
+.block h2 { font-size: 1.15rem; }
+.need { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.need li { display: grid; grid-template-columns: 5.2em 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.need .grp { grid-column: 1 / -1; border-bottom: 0; padding: 14px 0 2px; }
+.need .amt { font-weight: 700; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips span { border: 1.5px solid var(--line); border-radius: 99px; padding: 5px 12px; font-size: .95rem; background: var(--surface); }
+.foot { font-size: .85rem; color: var(--muted); }
+
+/* ---------- Cook mode ---------- */
+#cook { position: fixed; inset: 0; background: var(--bg);
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
+.cook-in { height: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+
+.top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+#exitBtn { min-width: 88px; font-size: 1.05rem; }
+.tbtn { min-height: 54px; min-width: 64px; padding: 0 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; font-size: .95rem; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.tbtn[aria-pressed="true"] { border-color: var(--amber); background: var(--amber-soft); color: var(--amber); }
+.prog { min-height: 46px; border: 0; background: none; padding: 2px 4px; display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; }
+.prog-label { display: flex; justify-content: center; align-items: baseline; gap: 8px; font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
+.prog-label small { font-size: .78rem; color: var(--muted); font-weight: 700; }
+.prog-label .tpill { font-family: var(--f-mono); font-size: .85rem; font-weight: 700; color: var(--surface); background: var(--amber); border-radius: 99px; padding: 1px 9px; }
+.prog-label .tpill.done { background: var(--accent); color: var(--accent-ink); }
+.segs { display: flex; gap: 4px; }
+.segs i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.segs i.done { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.segs i.cur { background: var(--accent); }
+
+.panes { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 10px; min-height: 0; }
+.ing { position: relative; background: var(--pane); border-radius: 16px; min-height: 0; display: flex; }
+.ing-scroll { overflow-y: auto; padding: 14px 14px 18px; width: 100%; overscroll-behavior: contain; }
+.ing-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; }
+.ing-list li { padding: 10px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; }
+.ing-list li:first-child { border-top: 0; padding-top: 2px; }
+.ing-amt { font-size: 1.45rem; font-weight: 700; line-height: 1.15; font-family: var(--f-mono); letter-spacing: -.01em; }
+.ing-name { font-size: 1.02rem; overflow-wrap: anywhere; }
+/* Long lists: first tighten, then (if the pane is wide enough) two columns, scrolling only as a last resort */
+.ing-list.compact li { padding: 6px 0; }
+.ing-list.compact .ing-amt { font-size: 1.2rem; }
+.ing-list.compact .ing-name { font-size: .95rem; line-height: 1.3; }
+.ing-list.two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+.ing-list.two li:nth-child(2) { border-top: 0; padding-top: 2px; }
+.more { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 8px 8px; border-radius: 0 0 16px 16px; text-align: center; font-size: .85rem; font-weight: 700; color: var(--ink);
+  background: linear-gradient(to bottom, transparent, var(--pane) 55%); pointer-events: none; }
+
+.stepp { background: var(--surface); border: 1.5px solid var(--line); border-radius: 16px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.step-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
+.step-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.step-meta .eyebrow { color: var(--accent); }
+.wake { border: 0; background: none; padding: 4px 0; font-size: .8rem; font-weight: 700; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }
+.wake::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.wake.on { color: var(--accent); } .wake.on::before { background: var(--accent); }
+.wake.off { color: var(--amber); } .wake.off::before { background: var(--amber); }
+.step-title { font-size: 1.55rem; }
+.step-text { font-size: 1.2rem; line-height: 1.5; margin: 0; }
+.step-text b { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 4px; padding: 0 3px; }
+.step-tools { font-size: .95rem; color: var(--muted); margin: 0; }
+.step-tools b { color: var(--ink); }
+.away { align-self: flex-start; min-height: 40px; border-radius: 99px; border: 1.5px solid var(--amber); background: var(--amber-soft); color: var(--amber); font-weight: 700; padding: 0 14px; font-size: .92rem; }
+.away.done { background: var(--amber); color: var(--surface); }
+
+.upnext { border: 0; border-top: 1.5px solid var(--line); background: var(--surface); text-align: left; padding: 10px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; min-height: 54px; }
+.upnext .lbl { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.upnext .nt { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; grid-column: 1; }
+.upnext .ni { font-size: .88rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; grid-column: 1; }
+.upnext .chev { grid-column: 2; grid-row: 1 / span 3; font-size: .8rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 4px; }
+
+.controls { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "timer timer" "back next"; gap: 10px; }
+.nav { min-height: 70px; border-radius: 16px; font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.back { grid-area: back; background: var(--surface); border: 2px solid var(--ink); }
+.next { grid-area: next; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--accent); }
+.nav[aria-disabled="true"] { opacity: .4; }
+.timer { grid-area: timer; display: flex; gap: 8px; min-width: 0; }
+.tmain { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; flex: 1; min-height: 62px; border-radius: 16px; border: 2px solid var(--amber); background: var(--amber-soft); color: var(--amber); display: flex; align-items: center; justify-content: center; gap: 12px; font-weight: 700; font-size: 1.1rem; padding: 0 14px; min-width: 0; }
+.tmain .mono { font-size: 1.6rem; }
+.tmain.running { background: var(--amber); color: var(--surface); }
+.tmain.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tmain .tlab { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; text-align: left; }
+.tmain .thint { font-size: .78rem; opacity: .85; }
+.tnone { flex: 1; min-height: 62px; border-radius: 16px; border: 1.5px dashed var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: .95rem; text-align: center; padding: 0 10px; }
+
+/* Landscape: wider step pane; timer stays ABOVE Back/Next (same as portrait) so nothing sits between the nav buttons */
+#cook[data-layout="land"] .panes { grid-template-columns: minmax(0, 1.25fr) minmax(0, 2.3fr); }
+#cook[data-layout="land"] .controls { gap: 8px; }
+#cook[data-layout="land"] .nav { min-height: 56px; }
+#cook[data-layout="land"] .tmain, #cook[data-layout="land"] .tnone { min-height: 48px; }
+#cook[data-layout="land"] .tmain .mono { font-size: 1.35rem; }
+#cook[data-layout="land"] .tbtn, #cook[data-layout="land"] .prog { min-height: 46px; }
+#cook[data-layout="land"] .cook-in { gap: 8px; }
+#cook[data-layout="land"] .step-title { font-size: 1.35rem; }
+#cook[data-layout="land"] .step-text { font-size: 1.15rem; }
+#cook[data-layout="land"] .upnext { min-height: 46px; padding-block: 6px; }
+#cook[data-layout="land"] .upnext .ni { display: none; }
+/* Short landscape phones: give the step text the room; the overview stays one tap away in the top bar */
+@media (max-height: 430px) { #cook[data-layout="land"] .upnext { display: none; } }
+
+@media (max-width: 380px) {
+  .tbtn { min-width: 56px; padding: 0 9px; }
+  .tbtn .lt { display: none; }
+  .step-text { font-size: 1.1rem; }
+  .ing-amt { font-size: 1.3rem; }
+}
+
+/* ---------- Overview sheet ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.42); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 760px; max-height: 88%; z-index: 21; background: var(--surface); border-radius: 20px 20px 0 0;
+  display: flex; flex-direction: column; transform: translateY(102%); transition: transform .25s ease; visibility: hidden; }
+.sheet.open { transform: translateY(0); visibility: visible; }
+.sheet-head { padding: 8px max(18px, env(safe-area-inset-right, 0px)) 10px max(18px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); touch-action: none; }
+.sheet-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.sheet-row h2 { font-size: 1.25rem; }
+.sheet-body { overflow-y: auto; padding: 12px max(18px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 22px) max(18px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 22px; overscroll-behavior: contain; }
+.ov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ov button { width: 100%; text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 12px; }
+.ov button.cur { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.ov .num { grid-row: 1 / span 3; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 700; font-size: .9rem; }
+.ov .cur .num { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.ov .done .num { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--accent); }
+.ov .t { font-weight: 700; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.ov .t small { font-weight: 700; color: var(--amber); font-size: .8rem; }
+.ov .i { font-size: .9rem; color: var(--muted); }
+.ov .x { font-size: .95rem; line-height: 1.45; }
+
+/* ---------- Timer done banner ---------- */
+.ding { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 10px); width: min(560px, calc(100% - 28px));
+  background: var(--amber); color: var(--surface); border-radius: 18px; padding: 14px 14px 14px 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.ding p { margin: 0; flex: 1; font-weight: 700; font-size: 1.15rem; line-height: 1.25; }
+.ding button { min-height: 56px; min-width: 88px; border-radius: 14px; border: 0; background: var(--surface); color: var(--ink); font-weight: 700; font-size: 1.1rem; }
+@media (prefers-reduced-motion: no-preference) { .ding:not([hidden]) { animation: pulse 1s ease-in-out 3; } }
+@keyframes pulse { 50% { transform: translateX(-50%) scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { .sheet, .scrim { transition: none; } }
+</style>
+</head>
+<body>
+
+<!-- ============ START SCREEN ============ -->
+<main id="start">
+  <div class="start-in">
+    <div class="start-head">
+      <div class="eyebrow">Recipe · Cantonese home cooking</div>
+      <h1>Stir-fried broccoli with garlic sauce</h1>
+      <div class="facts"><span><b>Serves 2</b></span><span><b>About 15 min</b></span><span><b>5 steps</b></span><span><b>4 timers</b></span></div>
+    </div>
+    <div class="notice" id="finished" hidden>Recipe finished. Enjoy your broccoli.</div>
+    <div class="cta">
+      <button class="btn-big" id="startBtn" type="button">Start cooking</button>
+      <button class="btn-plain" id="restartBtn" type="button" hidden>Start over from step 1</button>
+      <p class="cta-note" id="ctaNote">Cook mode keeps your screen on and shows one step at a time, with only the ingredients that step needs. Prop your phone up sideways or lay it flat; the layout follows.</p>
+    </div>
+    <section class="block">
+      <h2>What you'll need</h2>
+      <ul class="need" id="needList"></ul>
+    </section>
+    <section class="block">
+      <h2>Tools</h2>
+      <div class="chips" id="toolChips"></div>
+    </section>
+    <p class="foot">CS6750 medium-fidelity prototype, version 2. Best on a phone: rotate it to switch layouts.</p>
+  </div>
+</main>
+
+<!-- ============ COOK MODE ============ -->
+<div id="cook" hidden data-layout="port">
+  <div class="cook-in">
+    <div class="top">
+      <button class="tbtn" id="exitBtn" type="button" aria-label="Exit cook mode">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg><span class="lt">Exit</span>
+      </button>
+      <button class="prog" id="progBtn" type="button" aria-label="Open recipe overview">
+        <span class="prog-label"><span id="progText">Step 1 of 5</span><small id="progHint">Overview ▴</small></span>
+        <span class="segs" id="segs"></span>
+      </button>
+      <button class="tbtn" id="lockBtn" type="button" aria-pressed="false">
+        <svg id="lockIcon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"></svg><span class="lt" id="lockText">Auto</span>
+      </button>
+    </div>
+
+    <div class="panes">
+      <section class="ing" aria-label="Ingredients for this step">
+        <div class="ing-scroll" id="ingScroll">
+          <div class="eyebrow">For this step</div>
+          <ul class="ing-list" id="ingList"></ul>
+        </div>
+        <div class="more" id="more" hidden>▾ More below</div>
+      </section>
+      <section class="stepp" aria-live="polite">
+        <div class="step-scroll" id="stepScroll">
+          <div class="step-meta">
+            <span class="eyebrow" id="stepNo">Step 1</span>
+            <button class="wake" id="wakeBtn" type="button">Screen stays on</button>
+          </div>
+          <button class="away" id="awayChip" type="button" hidden></button>
+          <h2 class="step-title" id="stepTitle"></h2>
+          <p class="step-text" id="stepText"></p>
+          <p class="step-tools" id="stepTools"></p>
+        </div>
+        <button class="upnext" id="upNext" type="button">
+          <span class="lbl" id="upLbl">Up next</span>
+          <span class="nt" id="upTitle"></span>
+          <span class="ni" id="upIng"></span>
+          <span class="chev">All steps ▴</span>
+        </button>
+      </section>
+    </div>
+
+    <div class="controls">
+      <button class="nav back" id="backBtn" type="button"><span aria-hidden="true">◀</span> Back</button>
+      <div class="timer" id="timerBox"></div>
+      <button class="nav next" id="nextBtn" type="button"><span id="nextLbl">Next</span> <span aria-hidden="true">▶</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ OVERVIEW SHEET ============ -->
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-head" id="sheetHead">
+    <div class="sheet-row">
+      <h2 id="sheetTitle">Whole recipe</h2>
+      <button class="tbtn" id="closeSheet" type="button">Close</button>
+    </div>
+  </div>
+  <div class="sheet-body">
+    <ol class="ov" id="ovList"></ol>
+    <div class="block">
+      <h2>Tools</h2>
+      <div class="chips" id="sheetTools"></div>
+    </div>
+  </div>
+</section>
+
+<div class="ding" id="ding" role="alert" hidden>
+  <p id="dingText">Soak timer done</p>
+  <button type="button" id="dingOk">OK</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var STEPS = [
+    { title: "Wash & soak", timer: 180, tl: "Soak",
+      ing: [["12 oz", "broccoli"], ["2 tsp", "salt"], ["1 basin", "cold water"]],
+      text: "Fill a basin with cold water and stir in the <b>2 tsp salt</b>. Submerge the <b>12 oz broccoli</b> and let it soak for 3 minutes to loosen any grit. Drain, cut into bite-size florets, and peel the tough skin off the stem.",
+      tools: ["Basin", "Colander", "Knife & board"] },
+    { title: "Mix the sauce", timer: 0,
+      ing: [["1 tsp", "cornstarch"], ["2 tbsp", "cold water"], ["1 tbsp", "oyster sauce"], ["1 tsp", "light soy sauce"], ["½ tsp", "sugar"], ["½ tsp", "toasted sesame oil"], ["1 pinch", "ground white pepper"]],
+      text: "In a small bowl, whisk the <b>1 tsp cornstarch</b> into the <b>2 tbsp cold water</b> until no lumps remain. Add the <b>1 tbsp oyster sauce</b>, <b>1 tsp light soy sauce</b>, <b>½ tsp sugar</b>, <b>½ tsp sesame oil</b> and <b>a pinch of white pepper</b>, then whisk again. Set the bowl beside the stove. The cornstarch settles while it sits, so you'll stir it once more right before it goes in during step 5.",
+      tools: ["Small bowl", "Whisk or fork"] },
+    { title: "Flash-blanch the broccoli", timer: 45, tl: "Blanch",
+      ing: [["4 cups", "water"], ["1 tsp", "salt"], ["1 tsp", "neutral oil"], ["12 oz", "cut broccoli"]],
+      text: "Bring the <b>4 cups water</b> to a rolling boil in the wok. Add the <b>1 tsp salt</b> and <b>1 tsp oil</b>, then drop in the <b>broccoli</b>. Blanch for 45 seconds, until it turns bright green, then drain right away in the colander.",
+      tools: ["Wok", "Colander"] },
+    { title: "Bloom garlic & ginger", timer: 15, tl: "Sizzle",
+      ing: [["1 tbsp", "neutral oil"], ["3 cloves", "garlic, minced"], ["1 tsp", "ginger, minced"]],
+      text: "Wipe the wok dry and heat it on high until it just starts to smoke. Swirl in the <b>1 tbsp oil</b>, add the <b>garlic</b> and <b>ginger</b>, and stir constantly for 15 seconds until fragrant. Don't let the garlic brown.",
+      tools: ["Wok", "Spatula"] },
+    { title: "Toss & glaze", timer: 25, tl: "Glaze",
+      ing: [["12 oz", "blanched broccoli"], ["1 tsp", "Shaoxing wine"], ["1 bowl", "sauce from step 2"]],
+      text: "Add the <b>blanched broccoli</b> and toss to coat it in the garlic oil. Splash the <b>1 tsp Shaoxing wine</b> around the hot rim of the wok. Stir the <b>sauce</b> again, pour it over the center, and toss for 25 seconds until glossy. Serve right away.",
+      tools: ["Wok", "Spatula", "Serving plate"] }
+  ];
+  var TOOLS = ["Basin or large bowl", "Colander", "Knife & cutting board", "Small bowl", "Whisk or fork", "Wok or large skillet", "Spatula", "Serving plate"];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = "broc-cook-v1";
+  var S = { step: 0, cooking: false, locked: false, lockedMode: "port" };
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || "null"); if (saved) { S.step = Math.min(Math.max(saved.step | 0, 0), STEPS.length - 1); S.cooking = !!saved.cooking; } } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ step: S.step, cooking: S.cooking })); } catch (e) {} }
+
+  function fmt(sec) { sec = Math.max(0, Math.ceil(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+  function ingLine(s) { return s.ing.map(function (x) { return x[0] + " " + x[1]; }).join(" · "); }
+
+  /* ---------- Start screen ---------- */
+  function buildStart() {
+    var h = "";
+    STEPS.forEach(function (s, i) {
+      h += '<li class="grp"><span class="eyebrow">Step ' + (i + 1) + " · " + s.title + "</span></li>";
+      s.ing.forEach(function (x) { h += '<li><span class="amt">' + x[0] + "</span><span>" + x[1] + "</span></li>"; });
+    });
+    $("needList").innerHTML = h;
+    var chips = TOOLS.map(function (t) { return "<span>" + t + "</span>"; }).join("");
+    $("toolChips").innerHTML = chips; $("sheetTools").innerHTML = chips;
+  }
+  function showStart(finished) {
+    S.cooking = false; save();
+    $("cook").hidden = true; $("start").hidden = false; closeSheet();
+    $("finished").hidden = !finished;
+    var resume = !finished && S.step > 0;
+    $("startBtn").textContent = resume ? "Resume at step " + (S.step + 1) : "Start cooking";
+    $("restartBtn").hidden = !resume;
+    releaseWake();
+    window.scrollTo(0, 0);
+  }
+  function enterCook() {
+    ensureAudio();
+    S.cooking = true; save();
+    $("start").hidden = true; $("cook").hidden = false;
+    applyMode(); render(); requestWake();
+  }
+  $("startBtn").addEventListener("click", function () { if (!$("finished").hidden) S.step = 0; enterCook(); });
+  $("restartBtn").addEventListener("click", function () { S.step = 0; timers = {}; enterCook(); });
+  $("exitBtn").addEventListener("click", function () { showStart(false); });
+
+  /* ---------- Orientation + layout lock ---------- */
+  var mq = window.matchMedia("(orientation: landscape)");
+  function mode() { return S.locked ? S.lockedMode : (mq.matches ? "land" : "port"); }
+  var ICON_AUTO = '<path d="M14.5 6.5A6 6 0 0 0 4 4.8M3.5 11.5A6 6 0 0 0 14 13.2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M4 1.8v3.4h3.4M14 16.2v-3.4h-3.4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  var ICON_LOCK = '<rect x="3.5" y="8" width="11" height="8" rx="2" fill="currentColor"/><path d="M6 8V5.5a3 3 0 0 1 6 0V8" stroke="currentColor" stroke-width="1.8" fill="none"/>';
+  function applyMode() {
+    $("cook").dataset.layout = mode();
+    $("lockBtn").setAttribute("aria-pressed", String(S.locked));
+    $("lockIcon").innerHTML = S.locked ? ICON_LOCK : ICON_AUTO;
+    $("lockText").textContent = S.locked ? "Locked" : "Auto";
+    $("lockBtn").setAttribute("aria-label", S.locked ? "Layout locked. Tap to follow phone rotation again" : "Layout follows rotation. Tap to lock the current layout");
+    fitIngredients();
+  }
+  if (mq.addEventListener) mq.addEventListener("change", applyMode); else if (mq.addListener) mq.addListener(applyMode);
+  window.addEventListener("resize", applyMode);
+  $("lockBtn").addEventListener("click", function () {
+    if (!S.locked) { S.lockedMode = mq.matches ? "land" : "port"; S.locked = true; } else { S.locked = false; }
+    applyMode();
+  });
+
+  /* ---------- Render a step ---------- */
+  function render() {
+    var s = STEPS[S.step], n = STEPS.length;
+    $("progText").textContent = "Step " + (S.step + 1) + " of " + n;
+    $("segs").innerHTML = STEPS.map(function (_, i) { return '<i class="' + (i < S.step ? "done" : i === S.step ? "cur" : "") + '"></i>'; }).join("");
+    $("ingList").innerHTML = s.ing.map(function (x) { return '<li><span class="ing-amt">' + x[0] + '</span><span class="ing-name">' + x[1] + "</span></li>"; }).join("");
+    $("stepNo").textContent = "Step " + (S.step + 1);
+    $("stepTitle").textContent = s.title;
+    $("stepText").innerHTML = s.text;
+    $("stepTools").innerHTML = "<b>Have ready:</b> " + s.tools.join(", ");
+    var nx = STEPS[S.step + 1];
+    if (nx) { $("upLbl").textContent = "Up next · Step " + (S.step + 2); $("upTitle").textContent = nx.title; $("upIng").textContent = ingLine(nx); }
+    else { $("upLbl").textContent = "Last step"; $("upTitle").textContent = "Serve right away"; $("upIng").textContent = "Tap to review the whole recipe"; }
+    $("backBtn").setAttribute("aria-disabled", String(S.step === 0));
+    $("nextLbl").textContent = S.step === n - 1 ? "Finish" : "Next";
+    $("ingScroll").scrollTop = 0; $("stepScroll").scrollTop = 0;
+    renderTimer(); renderOverview(); fitIngredients();
+  }
+  function go(i) {
+    if (i < 0) return;
+    if (i >= STEPS.length) { S.step = 0; timers = {}; showStart(true); return; }
+    S.step = i; save(); render();
+  }
+  $("backBtn").addEventListener("click", function () { if (S.step > 0) go(S.step - 1); });
+  $("nextBtn").addEventListener("click", function () { go(S.step + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (!S.cooking) return;
+    if (e.key === "Escape") closeSheet();
+    if ($("sheet").classList.contains("open")) return;
+    if (e.key === "ArrowRight") go(S.step + 1);
+    if (e.key === "ArrowLeft" && S.step > 0) go(S.step - 1);
+  });
+
+  /* "More below" hint for long ingredient lists */
+  function checkMore() { var el = $("ingScroll"); $("more").hidden = el.scrollHeight - el.scrollTop - el.clientHeight < 6; }
+  function overflows() { var el = $("ingScroll"); return el.scrollHeight - el.clientHeight > 2; }
+  /* Fit long lists without scrolling: tighten first, then two columns if the pane is wide enough. Scroll is the last resort. */
+  function fitIngredients() {
+    var list = $("ingList"), el = $("ingScroll");
+    if ($("cook").hidden) return;
+    list.classList.remove("compact", "two");
+    if (overflows()) list.classList.add("compact");
+    if (overflows() && el.clientWidth >= 250) list.classList.add("two");
+    checkMore();
+  }
+  $("ingScroll").addEventListener("scroll", checkMore, { passive: true });
+
+  /* ---------- Timers (keep running across steps) ---------- */
+  var timers = {}; // stepIndex -> { left: seconds, endAt: ms|null, done: bool }
+  function tLeft(t) { return t.endAt ? (t.endAt - Date.now()) / 1000 : t.left; }
+  function renderTimer() {
+    var s = STEPS[S.step], box = $("timerBox"), t = timers[S.step];
+    if (!s.timer) { box.innerHTML = '<div class="tnone">No timer for this step</div>'; renderAway(); renderTopPill(); return; }
+    var state = !t ? "idle" : t.done ? "done" : t.endAt ? "running" : "paused";
+    var label = { idle: "Start " + s.tl.toLowerCase(), running: s.tl + " running", paused: s.tl + " paused", done: s.tl + " done" }[state];
+    var hint = { idle: "One tap", running: "Tap to pause · hold to reset", paused: "Tap to resume · hold to reset", done: "Tap to run again" }[state];
+    var time = state === "done" ? "✓" : fmt(t ? tLeft(t) : s.timer);
+    box.innerHTML = '<button class="tmain ' + state + '" id="tmain" type="button"><span class="tlab"><span>' + label + '</span><span class="thint">' + hint + '</span></span><span class="mono" id="tdigits">' + time + "</span></button>";
+    bindTimerButton($("tmain"));
+    renderAway(); renderTopPill();
+  }
+  /* One button: tap = start / pause / resume; press and hold (0.6 s) = reset. No separate Reset target near the nav buttons. */
+  function bindTimerButton(btn) {
+    var hold = null, held = false;
+    function clear() { if (hold) { clearTimeout(hold); hold = null; } }
+    btn.addEventListener("pointerdown", function () {
+      held = false; clear();
+      hold = setTimeout(function () { hold = null; if (timers[S.step]) { held = true; delete timers[S.step]; try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {} renderTimer(); } }, 600);
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) { btn.addEventListener(ev, clear); });
+    btn.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    btn.addEventListener("click", function () { if (held) { held = false; return; } tapTimer(S.step); });
+  }
+  function tapTimer(i) {
+    ensureAudio();
+    var t = timers[i];
+    if (!t || t.done) { timers[i] = { left: STEPS[i].timer, endAt: Date.now() + STEPS[i].timer * 1000, done: false }; }
+    else if (t.endAt) { t.left = tLeft(t); t.endAt = null; }
+    else { t.endAt = Date.now() + t.left * 1000; }
+    renderTimer();
+  }
+  /* Glanceable countdown in the top bar, visible from any step (P10: "keep an eye on the clock") */
+  function renderTopPill() {
+    var best = null;
+    Object.keys(timers).forEach(function (k) {
+      var t = timers[k];
+      if (t.endAt && (best === null || !timers[best].endAt || t.endAt < timers[best].endAt)) best = +k;
+      else if (t.done && best === null) best = +k;
+    });
+    var h = $("progHint");
+    if (best === null) { h.className = ""; h.textContent = "Overview ▴"; return; }
+    var bt = timers[best];
+    h.className = "tpill" + (bt.done ? " done" : "");
+    h.textContent = STEPS[best].tl + " " + (bt.done ? "done" : fmt(tLeft(bt)));
+  }
+  function renderAway() {
+    var chip = $("awayChip"), found = null;
+    Object.keys(timers).forEach(function (k) { k = +k; var t = timers[k]; if (k !== S.step && (t.endAt || t.done) && found === null) found = k; });
+    if (found === null) { chip.hidden = true; return; }
+    var t = timers[found];
+    chip.hidden = false; chip.className = "away" + (t.done ? " done" : "");
+    chip.textContent = STEPS[found].tl + (t.done ? " done" : " " + fmt(tLeft(t))) + " · back to step " + (found + 1);
+    chip.onclick = function () { go(found); };
+  }
+  setInterval(function () {
+    var changed = false;
+    Object.keys(timers).forEach(function (k) {
+      var t = timers[k];
+      if (t.endAt && t.endAt <= Date.now()) { t.endAt = null; t.left = 0; t.done = true; changed = true; alarm(+k); }
+    });
+    if (!S.cooking) return;
+    if (changed) { renderTimer(); return; }
+    var t = timers[S.step], d = $("tdigits");
+    if (t && t.endAt && d) d.textContent = fmt(tLeft(t));
+    renderAway(); renderTopPill();
+  }, 250);
+
+  var ac = null;
+  function ensureAudio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === "suspended") ac.resume(); } catch (e) {} }
+  function beep() {
+    if (!ac) return;
+    try {
+      var t0 = ac.currentTime;
+      for (var k = 0; k < 3; k++) {
+        var o = ac.createOscillator(), g = ac.createGain(), st = t0 + k * 0.4;
+        o.type = "sine"; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.4, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.25);
+        o.connect(g); g.connect(ac.destination); o.start(st); o.stop(st + 0.27);
+      }
+    } catch (e) {}
+  }
+  function alarm(i) {
+    beep();
+    try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); } catch (e) {}
+    $("dingText").textContent = STEPS[i].tl + " timer done" + (i !== S.step ? " (step " + (i + 1) + ")" : "");
+    $("ding").hidden = false;
+    clearTimeout(dingTimer);
+    dingTimer = setTimeout(function () { $("ding").hidden = true; }, 5000); // dismisses itself: no tap needed
+  }
+  var dingTimer = null;
+  $("dingOk").addEventListener("click", function () { clearTimeout(dingTimer); $("ding").hidden = true; });
+
+  /* ---------- Screen wake lock ---------- */
+  var wl = null;
+  function setWake(on, msg) { var b = $("wakeBtn"); b.className = "wake " + (on ? "on" : "off"); b.textContent = msg; b.disabled = on; }
+  function requestWake() {
+    if (!("wakeLock" in navigator)) { setWake(false, "Screen may sleep (not supported here)"); return; }
+    navigator.wakeLock.request("screen").then(function (lock) {
+      wl = lock; setWake(true, "Screen stays on");
+      lock.addEventListener("release", function () { wl = null; if (S.cooking) setWake(false, "Screen may sleep · tap to keep on"); });
+    }).catch(function () { setWake(false, "Screen may sleep · tap to keep on"); });
+  }
+  function releaseWake() { if (wl) { var l = wl; wl = null; l.release().catch(function () {}); } }
+  $("wakeBtn").addEventListener("click", requestWake);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && S.cooking && !wl) requestWake(); });
+
+  /* ---------- Overview sheet ---------- */
+  function renderOverview() {
+    $("ovList").innerHTML = STEPS.map(function (s, i) {
+      var cls = i < S.step ? "done" : i === S.step ? "cur" : "";
+      return '<li><button type="button" class="' + cls + '" data-i="' + i + '">' +
+        '<span class="num">' + (i < S.step ? "✓" : i + 1) + "</span>" +
+        '<span class="t">' + s.title + (s.timer ? "<small>" + fmt(s.timer) + " timer</small>" : "") + (i === S.step ? "<small style=\"color:var(--accent)\">You are here</small>" : "") + "</span>" +
+        '<span class="i">' + ingLine(s) + "</span>" +
+        '<span class="x">' + s.text.replace(/<\/?b>/g, "") + "</span></button></li>";
+    }).join("");
+  }
+  $("ovList").addEventListener("click", function (e) { var b = e.target.closest("button[data-i]"); if (b) { go(+b.dataset.i); closeSheet(); } });
+  var lastFocus = null;
+  function openSheet() { lastFocus = document.activeElement; renderOverview(); $("sheet").classList.add("open"); $("scrim").classList.add("open"); $("closeSheet").focus(); var cur = $("ovList").querySelector(".cur"); if (cur) cur.scrollIntoView({ block: "center" }); }
+  function closeSheet() { if (!$("sheet").classList.contains("open")) return; $("sheet").classList.remove("open"); $("scrim").classList.remove("open"); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  $("progBtn").addEventListener("click", openSheet);
+  $("upNext").addEventListener("click", openSheet);
+  $("closeSheet").addEventListener("click", closeSheet);
+  $("scrim").addEventListener("click", closeSheet);
+
+  /* ---------- Boot ---------- */
+  buildStart();
+  if (S.cooking) { $("start").hidden = true; $("cook").hidden = false; applyMode(); render(); requestWake(); }
+  else showStart(false);
+})();
+</script>
+</body>
+</html>
