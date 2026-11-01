@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f3f5f2">
-<title>Broccoli Cook Mode v2</title>
+<title>Broccoli Cook Mode v3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Mono:wght@500;700&display=swap">
@@ -75,7 +75,9 @@ svg { flex: none; }
 #cook { position: fixed; inset: 0; background: var(--bg);
   padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
   padding-top: calc(env(safe-area-inset-top, 0px) + 8px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
-.cook-in { height: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+.cook-in { height: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+/* Fix: without an explicit minmax(0,1fr) column, long text inside the panes widened the whole grid past the phone's edge */
+.cook-in > *, .top > *, .controls > * { min-width: 0; }
 
 .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 #exitBtn { min-width: 88px; font-size: 1.05rem; }
@@ -144,9 +146,22 @@ svg { flex: none; }
 .tmain .thint { font-size: .78rem; opacity: .85; }
 .tnone { flex: 1; min-height: 62px; border-radius: 16px; border: 1.5px dashed var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: .95rem; text-align: center; padding: 0 10px; }
 
-/* Landscape: wider step pane; timer stays ABOVE Back/Next (same as portrait) so nothing sits between the nav buttons */
+/* Landscape = "propped-up" glance mode: ingredients stay LEFT; a third column on the right holds a big timer and the next-step preview.
+   Back/Next keep their own row with nothing between them. (JS moves #timerBox and #upNext into #rail.) */
+/* The rail appears ONLY on steps that have a timer; other steps give that width back to the ingredients and step text. */
+.rail { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+#cook:not([data-layout="land"][data-rail="on"]) .rail { display: none; }
 #cook[data-layout="land"] .panes { grid-template-columns: minmax(0, 1.25fr) minmax(0, 2.3fr); }
-#cook[data-layout="land"] .controls { gap: 8px; }
+#cook[data-layout="land"][data-rail="on"] .panes { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.9fr) minmax(0, 0.85fr); }
+#cook[data-layout="land"] .controls { gap: 8px; grid-template-areas: "back next"; }
+#cook[data-layout="land"][data-rail="off"] .controls .timer { display: none; }
+.rail .timer { flex: 1 1 auto; min-height: 0; }
+.rail .tmain { flex-direction: column; gap: 2px; padding: 8px 12px; }
+.rail .tmain .tlab { align-items: center; text-align: center; }
+#cook[data-layout="land"] .rail .tmain .mono { font-size: clamp(2rem, 9vh, 3.2rem); line-height: 1.05; order: 2; }
+.rail .tmain .tlab { order: 1; }
+.rail .tnone { flex: 1; }
+.rail .upnext { flex: none; border: 1.5px solid var(--line); border-radius: 16px; }
 #cook[data-layout="land"] .nav { min-height: 56px; }
 #cook[data-layout="land"] .tmain, #cook[data-layout="land"] .tnone { min-height: 48px; }
 #cook[data-layout="land"] .tmain .mono { font-size: 1.35rem; }
@@ -155,9 +170,8 @@ svg { flex: none; }
 #cook[data-layout="land"] .step-title { font-size: 1.35rem; }
 #cook[data-layout="land"] .step-text { font-size: 1.15rem; }
 #cook[data-layout="land"] .upnext { min-height: 46px; padding-block: 6px; }
-#cook[data-layout="land"] .upnext .ni { display: none; }
-/* Short landscape phones: give the step text the room; the overview stays one tap away in the top bar */
-@media (max-height: 430px) { #cook[data-layout="land"] .upnext { display: none; } }
+/* Short landscape phones: keep the preview to its title so the big timer keeps its room */
+@media (max-height: 430px) { #cook[data-layout="land"] .upnext .ni, #cook[data-layout="land"] .upnext .chev { display: none; } }
 
 @media (max-width: 380px) {
   .tbtn { min-width: 56px; padding: 0 9px; }
@@ -221,7 +235,7 @@ svg { flex: none; }
       <h2>Tools</h2>
       <div class="chips" id="toolChips"></div>
     </section>
-    <p class="foot">CS6750 medium-fidelity prototype, version 2. Best on a phone: rotate it to switch layouts.</p>
+    <p class="foot">CS6750 medium-fidelity prototype, version 3. Best on a phone: rotate it to switch layouts.</p>
   </div>
 </main>
 
@@ -267,6 +281,7 @@ svg { flex: none; }
           <span class="chev">All steps ▴</span>
         </button>
       </section>
+      <aside class="rail" id="rail" aria-label="Timer and next step"></aside>
     </div>
 
     <div class="controls">
@@ -372,8 +387,18 @@ svg { flex: none; }
   function mode() { return S.locked ? S.lockedMode : (mq.matches ? "land" : "port"); }
   var ICON_AUTO = '<path d="M14.5 6.5A6 6 0 0 0 4 4.8M3.5 11.5A6 6 0 0 0 14 13.2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M4 1.8v3.4h3.4M14 16.2v-3.4h-3.4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
   var ICON_LOCK = '<rect x="3.5" y="8" width="11" height="8" rx="2" fill="currentColor"/><path d="M6 8V5.5a3 3 0 0 1 6 0V8" stroke="currentColor" stroke-width="1.8" fill="none"/>';
+  /* Landscape: move the timer and the next-step preview into the right-hand rail; portrait: put them back */
+  var homeControls = document.querySelector(".controls"), homeStep = document.querySelector(".stepp");
+  function placeRail(land) {
+    var rail = $("rail"), tb = $("timerBox"), un = $("upNext");
+    var on = land && !!STEPS[S.step].timer;   // rail only for steps with a timer
+    $("cook").dataset.rail = on ? "on" : "off";
+    if (on && tb.parentNode !== rail) { rail.appendChild(tb); rail.appendChild(un); }
+    else if (!on && tb.parentNode === rail) { homeControls.insertBefore(tb, $("nextBtn")); homeStep.appendChild(un); }
+  }
   function applyMode() {
     $("cook").dataset.layout = mode();
+    placeRail(mode() === "land");
     $("lockBtn").setAttribute("aria-pressed", String(S.locked));
     $("lockIcon").innerHTML = S.locked ? ICON_LOCK : ICON_AUTO;
     $("lockText").textContent = S.locked ? "Locked" : "Auto";
@@ -403,6 +428,7 @@ svg { flex: none; }
     $("backBtn").setAttribute("aria-disabled", String(S.step === 0));
     $("nextLbl").textContent = S.step === n - 1 ? "Finish" : "Next";
     $("ingScroll").scrollTop = 0; $("stepScroll").scrollTop = 0;
+    placeRail(mode() === "land");
     renderTimer(); renderOverview(); fitIngredients();
   }
   function go(i) {
